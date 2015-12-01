@@ -1,0 +1,101 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "This templates creates EC2 instance with WSO2 API Manager installed into it.",
+  "Mappings" : {
+    "RegionMap" : {
+      "eu-west-1" : { "HVM64" : "ami-47a23a30"},
+      "eu-central-1" : { "HVM64" : "ami-accff2b1"}
+      }
+  },
+  "Parameters": {
+    "InstanceTypeParameter": {
+      "Type": "String",
+      "Default": "t2.micro",
+      "Description": "Specify ec2 instance type. Default is t2.micro."
+    },
+    "KeyPairNameParameter": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Default": "MyKeyPairName",
+      "Description": "Existing key pair name that is used to connect ec2 instance. Make sure that specified key pair exists in current region."
+    },
+    "SourceIPAddressParameter": {
+      "Type": "String",
+      "Default": "1.2.3.4/32",
+      "Description": "Source IP address in CIDR notation that is allowed to access ec2 instance. Note use prefix /32"
+    },
+    "DefaultVPCIdParameter" : {
+      "Type" : "String",
+      "Default" : "Type id of default VPC here (e.g. vpc-c532fbac)",
+      "Description" : "Default VPC id in the region."
+    }
+  },
+  "Resources": {
+    "wso2amInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": { "Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "HVM64"]},
+        "InstanceType": {
+          "Ref": "InstanceTypeParameter"
+        },
+        "KeyName": {
+          "Ref": "KeyPairNameParameter"
+        },
+        "SecurityGroupIds" : [{ "Ref": "wso2amSG" }],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "apt-get update\n",
+                "apt-get install -y software-properties-common python-software-properties\n",
+                "add-apt-repository -y ppa:webupd8team/java\n",
+                "apt-get update\n",
+                "echo oracle-java7-installer shared/accepted-oracle-license-v1-1 select true | sudo /usr/bin/debconf-set-selections\n",
+                "apt-get install -y oracle-java7-installer\n",
+                "wget -P /opt https://s3-us-west-2.amazonaws.com/wso2-stratos/wso2am-1.9.1.zip\n",
+                "apt-get install -y zip\n",
+                "unzip /opt/wso2am-1.9.1.zip -d /opt\n",
+                "export JAVA_HOME=/usr/lib/jvm/java-7-oracle/jre\n",
+                "./opt/wso2am-1.9.1/bin/wso2server.sh\n"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "wso2amSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security Group for wso2am ec2 instance. Allows access to 9443 and 8243 ports.",
+        "VpcId" : { "Ref": "DefaultVPCIdParameter" },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "9443",
+            "ToPort": "9443",
+            "CidrIp": {
+              "Ref": "SourceIPAddressParameter"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "8243",
+            "ToPort": "8243",
+            "CidrIp": {
+              "Ref": "SourceIPAddressParameter"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "CidrIp": {
+              "Ref": "SourceIPAddressParameter"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
